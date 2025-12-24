@@ -51,56 +51,30 @@ int	main(int argc, char **argv)
         exit(1);
     }
 
-    Record *input_map = mmap(NULL, size, PROT_READ, MAP_PRIVATE, fd_in, 0);
-    if (input_map == MAP_FAILED) {
+    if (mmap(NULL, size, PROT_READ, MAP_PRIVATE, fd_in, 0) == MAP_FAILED) {
         perror("Error mapping input file");
         exit(1);
     }
-printf("[Step 2 Success] Input file mapped! Total records: %ld\n", size / RECORD_SIZE);
+    printf("Input file mapped successfully! Total records: %ld\n", size / RECORD_SIZE);
 
-    // ==========================================
-    // 4. 处理输出文件 (Output File)
-    // ==========================================
-    
-    // 打开/创建输出文件
-    // O_RDWR: 读写模式 (mmap 需要读写权限)
-    // O_CREAT: 如果文件不存在就创建
-    // O_TRUNC: 如果文件存在就清空它
-    // 0666: 文件权限
     int fd_out = open(output_file, O_RDWR | O_CREAT | O_TRUNC, 0666);
-    if (fd_out < 0) {
-        perror("Error opening output file");
-        exit(1);
-    }
+    if (fd_out < 0){
+		perror("Error opening ouput file");
+		exit(1);
+	}
 
-    // ★ 关键细节：扩展文件大小
-    // 新创建的文件大小是 0。如果你直接 map 0 字节的文件然后往里写数据，程序会崩 (SIGBUS 错误)。
-    // 我们必须先用 ftruncate 把文件“撑大”到和输入文件一样大。
     if (ftruncate(fd_out, size) == -1) {
         perror("Error analyzing output file size");
         exit(1);
     }
 
-    // ★ mmap 输出文件
-    // PROT_READ | PROT_WRITE: 我们需要写入排序后的数据
-    // MAP_SHARED: ★这是必须的★。SHARED 意味着我们的修改会写回硬盘文件，而不是只留在内存里。
-    Record *output_map = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd_out, 0);
-    if (output_map == MAP_FAILED) {
-        perror("Error mapping output file");
+    if (mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd_out, 0) == MAP_FAILED) {
+        perror("Error mapping input file");
         exit(1);
     }
-    
-    printf("[Step 2 Success] Output file mapped and resized!\n");
+    printf("Output file mapped and resized successfully!\n");
 
-    // ==========================================
-    // 5. 收尾工作 (Cleanup)
-    // ==========================================
-    
-    // 解除映射 (虽然程序结束会自动解除，但好习惯是手动做)
-    munmap(input_map, size);
-    munmap(output_map, size);
-    
-    // 关闭文件描述符
+    // fsync(fd_out);
     close(fd_in);
     close(fd_out);
 

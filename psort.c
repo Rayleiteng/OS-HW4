@@ -9,9 +9,6 @@
 #include <stdint.h>
 #include <time.h>
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdint.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
 #define RECORD_SIZE 128
@@ -136,7 +133,7 @@ void k_way_merge(Record *output_map, ThreadArgs *threads, int num_thread){
 int	main(int argc, char **argv)
 {
 	if (argc != 3){
-		fprintf(stderr, "Usage: %s input_file output_file\n", argv[0]);
+		fprintf(stderr, "Usage: %s input_file output_file.\n", argv[0]);
 		exit(1);
 	}
 	char *input_file = argv[1];
@@ -144,20 +141,20 @@ int	main(int argc, char **argv)
 
 	int fd_in = open(input_file, O_RDONLY);
 	if (fd_in < 0){
-		perror("Error opening input file");
+		perror("Error opening input file.");
 		exit(1);
 	}
 
 	struct stat fd_in_stat;
 	if (fstat(fd_in, &fd_in_stat) < 0){
-        perror("Error getting file stats");
+        perror("Error getting file stats.");
         exit(1);
 	}
 
     size_t file_size = fd_in_stat.st_size;
 
     if(file_size % RECORD_SIZE != 0){
-        perror("Error  inpout file should have a size as a multiple of 100");
+        perror("Error  inpout file should have a size as a multiple of 100.");
         exit(1);
     }
 
@@ -165,19 +162,19 @@ int	main(int argc, char **argv)
 
     Record *input_map = mmap(NULL, file_size, PROT_READ, MAP_PRIVATE, fd_in, 0);
     if (input_map == MAP_FAILED) {
-        perror("Error mapping input file");
+        perror("Error mapping input file.");
         exit(1);
     }
     printf("Input file mapped successfully! Total records: %ld\n", file_size / RECORD_SIZE);
 
     int fd_out = open(output_file, O_RDWR | O_CREAT | O_TRUNC, 0666);
     if (fd_out < 0){
-		perror("Error opening ouput file");
+		perror("Error opening ouput file.");
 		exit(1);
 	}
 
     if (ftruncate(fd_out, file_size) == -1) {
-        perror("Error analyzing output file size");
+        perror("Error analyzing output file size.");
         exit(1);
     }
 
@@ -189,10 +186,12 @@ int	main(int argc, char **argv)
     }
     printf("Output file mapped and resized successfully!\n");
 
-
-
     Record *buffer = malloc(file_size);
-    memcpy(buffer, input_map, file_size);
+    if (!buffer){
+		perror("malloc");
+		exit(1);
+	}
+    memcpy(buffer, input_map, file_size); //copy to buffer for sorting
 
     int num_threads = get_nprocs();
 
@@ -204,7 +203,7 @@ int	main(int argc, char **argv)
     size_t current_offset = 0;
 
     for (int i = 0; i < num_threads; i++) {
-        size_t count = records_per_thread + (i < remainder ? 1 : 0);
+        size_t count = records_per_thread + (i < remainder ? 1 : 0); // to handle the remainder
         
         args[i].thread_id = i;
         args[i].base = buffer + current_offset; 
@@ -213,7 +212,7 @@ int	main(int argc, char **argv)
         current_offset += count; 
 
         if(pthread_create(&threads[i], NULL, sort_for_thread, &args[i])){
-            fprintf(stderr, "Error creating thread %d\n", i);
+            fprintf(stderr, "Error creating thread. %d\n", i);
             exit(1);
         }
     }

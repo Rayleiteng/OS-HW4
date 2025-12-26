@@ -14,7 +14,7 @@
 #include <stdint.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
-#define RECORD_SIZE 100
+#define RECORD_SIZE 128
 #define KEY_SIZE 4
 
 typedef struct{
@@ -27,6 +27,16 @@ typedef struct {
     size_t nmemb;
     int thread_id;
 } ThreadArgs;
+
+typedef struct {
+    Record record;
+    int index;
+} Node;
+
+typedef struct {
+    Node *nodes;
+    uint32_t heap_size;
+}Heap;
 
 int my_compare(const void *a, const void *b){
     Record *r1 = (Record *)a;
@@ -45,6 +55,83 @@ void *sort_for_thread(void *arg) {
     
     return NULL;
 }
+
+void swap(Node *a, Node *b) {
+    Node temp = *a;
+    *a = *b;
+    *b = temp;
+}
+
+void heapify(Heap *heap, int i) {
+    Node *nodes = heap->nodes;
+    int size = heap->heap_size;
+    int smallest = i;
+    int left = 2 * i + 1;
+    int right = 2 * i + 2;
+
+    if (left < size && nodes[left].record.key < nodes[smallest].record.key)
+        smallest = left;
+    
+    if (right < size && nodes[right].record.key < nodes[smallest].record.key)
+        smallest = right;
+
+    if (smallest != i) {
+        swap(&nodes[i], &nodes[smallest]);
+        heapify(heap, smallest);
+    }
+}
+
+void init_heap(const ThreadArgs *threads, int num_thread, Heap *heap, size_t *curr_idx){
+    heap->nodes = malloc(num_thread * sizeof(Node));
+    heap->heap_size = 0;
+    for (int i = 0; i < num_thread; i++) {
+        if (threads[i].nmemb > 0) {
+            heap->nodes[heap->heap_size].record = ((Record*)threads[i].base)[0]; 
+            heap->nodes[heap->heap_size].index = i; 
+            curr_idx[i] = 1;
+            heap->heap_size++;
+        }
+        else
+            curr_idx[i] = 0;
+    }
+
+    for (int i = (heap->heap_size - 2) / 2; i >= 0; i--) {
+        heapify(heap, i);
+    }
+}
+
+void k_way_merge(Record *output_map, ThreadArgs *threads, int num_thread){
+    size_t curr_idx[num_thread];
+    Heap heap;
+    init_heap(threads, num_thread, &heap, curr_idx);
+    int output_index = 0;
+    while (heap.heap_size > 0) {
+        Node min_node = heap.nodes[0];
+        
+        output_map[output_index++] = min_node.record;
+
+        int chunk_idx = min_node.index;
+        
+        if (curr_idx[chunk_idx] < threads[chunk_idx].nmemb) {
+            Record *base_addr = (Record *)threads[chunk_idx].base;
+            
+            heap.nodes[0].record = base_addr[curr_idx[chunk_idx]];
+            heap.nodes[0].index = chunk_idx;
+            
+            curr_idx[chunk_idx]++;
+        } else {
+            heap.nodes[0] = heap.nodes[heap.heap_size - 1];
+            heap.heap_size--;
+        }
+
+        if (heap.heap_size > 0) {
+            heapify(&heap, 0);
+        }
+    }
+    free(heap.nodes);
+    printf("Merge complete!\n");
+}
+
 
 int	main(int argc, char **argv)
 {
@@ -135,17 +222,18 @@ int	main(int argc, char **argv)
         pthread_join(threads[i], NULL);
     }
 
-    printf("[Step 3 Success] All chunks sorted!\n");
+    printf("All threads sorted!\n");
 
-    memcpy(output_map, buffer, file_size);
+    k_way_merge(output_map, args, num_threads);
+    fsync(fd_out);
 
     munmap(input_map, file_size);
     munmap(output_map, file_size);
     close(fd_in);
     close(fd_out);
+    free(buffer);
     free(args);
     free(threads);
-    
 
     return 0;
 }

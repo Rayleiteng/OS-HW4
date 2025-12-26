@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <time.h>
 
-#define RECORD_SIZE 100
+#define RECORD_SIZE 128
 
 void random_record(FILE *f) {
     uint32_t key = rand();  // random 4-byte key

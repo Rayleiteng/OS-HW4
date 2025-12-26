@@ -1,8 +1,8 @@
 .PHONY: all clean
 
 all: psort gen 
-	./gen input.bin 1000
-	./psort input.bin output.bin
+	./gen input.bin 100000
+	time ./psort input.bin output.bin
 
 psort: psort.c
 	gcc -Wall -Werror -o psort psort.c
